@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link"; // Nhớ import Link
 import { loginUser, registerUser } from "@/app/actions";
 
 export default function AuthPage() {
@@ -68,7 +69,7 @@ export default function AuthPage() {
                 type="password"
                 required
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                // Xử lý bo góc nếu không có email
+                // Xử lý bo góc nếu không có email (chế độ đăng nhập)
                 style={!isRegistering ? { borderBottomLeftRadius: '0.375rem', borderBottomRightRadius: '0.375rem' } : {}}
                 placeholder="Mật khẩu"
               />
@@ -80,12 +81,22 @@ export default function AuthPage() {
                 <input
                   name="email"
                   type="email"
+                  required // Bắt buộc nhập email khi đăng ký để còn gửi OTP
                   className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                  placeholder="Email (Không bắt buộc)"
+                  placeholder="Email (Để khôi phục mật khẩu)"
                 />
               </div>
             )}
           </div>
+
+          {/* --- THÊM LINK QUÊN MẬT KHẨU (Chỉ hiện khi Đăng nhập) --- */}
+          {!isRegistering && (
+            <div className="flex items-center justify-end">
+              <Link href="/forgot-password" className="text-sm font-medium text-blue-600 hover:text-blue-500">
+                Quên mật khẩu?
+              </Link>
+            </div>
+          )}
 
           <button
             type="submit"

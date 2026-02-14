@@ -5,7 +5,10 @@ export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(), // Tên đăng nhập (Bắt buộc & Duy nhất)
   password: text("password").notNull(),          // Mật khẩu (Lưu nguyên văn)
-  email: text("email"),                          // Email (Không bắt buộc - Optional)
+  email: text("email"),
+  // --- THÊM 2 CỘT NÀY ---
+  otp: text("otp"), // Lưu mã 6 số
+  otpExpires: timestamp("otp_expires"),                          // Email (Không bắt buộc - Optional)
   createdAt: timestamp("created_at").defaultNow(),
 });
 
