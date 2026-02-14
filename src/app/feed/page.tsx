@@ -65,7 +65,7 @@ export default async function FeedPage() {
         )}
 
         {/* --- DANH SÁCH BÀI VIẾT --- */}
-        <div className="space-y-6"> {/* Tăng gap lên xíu cho thoáng */}
+        <div className="space-y-6"> 
           {allPosts.length > 0 ? (
             allPosts.map((post) => (
               <div key={post.id} className="bg-white rounded-xl shadow-sm p-5 border border-gray-100 transition hover:shadow-md">
@@ -78,7 +78,7 @@ export default async function FeedPage() {
                   </div>
                   
                   {/* Nội dung chính */}
-                  <div className="flex-1 w-full min-w-0"> {/* min-w-0 giúp text không bị tràn */}
+                  <div className="flex-1 w-full min-w-0"> 
                     
                     {/* Tên & Thời gian */}
                     <div className="flex justify-between items-start mb-2">
@@ -100,15 +100,18 @@ export default async function FeedPage() {
                       </p>
                     )}
 
-                    {/* Image content (Nếu có) */}
+                    {/* Image content (CẬP NHẬT: Responsive giữ tỷ lệ gốc) */}
                     {post.imageUrl && (
-                      <div className="relative w-full h-64 sm:h-80 bg-gray-50 rounded-lg overflow-hidden border border-gray-100 mt-3">
+                      <div className="mt-3 w-full rounded-lg overflow-hidden border border-gray-100 bg-gray-50">
                         <Image 
                            src={post.imageUrl} 
                            alt="Post image" 
-                           fill 
-                           className="object-cover hover:scale-105 transition-transform duration-500"
-                           sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                           // Kỹ thuật của Next.js để ảnh Responsive theo chiều rộng mà giữ tỷ lệ gốc
+                           width={0}
+                           height={0}
+                           sizes="100vw"
+                           style={{ width: '100%', height: 'auto' }} 
+                           className="hover:opacity-95 transition-opacity duration-300"
                         />
                       </div>
                     )}
