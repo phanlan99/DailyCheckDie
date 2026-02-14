@@ -2,9 +2,9 @@
 import Navbar from "@/components/Navbar";
 import AttendanceCalendar from "@/components/AttendanceCalendar";
 import { cookies } from "next/headers";
-import { db } from "@/db";          // Import db
-import { users } from "@/db/schema"; // Import bảng users
-import { eq } from "drizzle-orm";    // Import hàm so sánh
+import { db } from "@/db";
+import { users } from "@/db/schema";
+import { eq } from "drizzle-orm";
 
 export default async function Home() {
   // 1. Lấy Cookie
@@ -16,9 +16,10 @@ export default async function Home() {
   let username = null;
   if (userId) {
     try {
+      // Ép kiểu userId sang number vì trong DB id là số (serial)
       const userList = await db.select().from(users).where(eq(users.id, parseInt(userId)));
       if (userList.length > 0) {
-        username = userList[0].username; // Lấy tên user
+        username = userList[0].username;
       }
     } catch (e) {
       console.log("Lỗi lấy user:", e);
@@ -40,7 +41,12 @@ export default async function Home() {
           </p>
         </div>
 
-        <AttendanceCalendar userId={userId} />
+        {/* QUAN TRỌNG: Thêm prop key={userId || 'guest'}
+          Khi userId thay đổi (đăng nhập/đăng xuất), React sẽ hủy component cũ 
+          và tạo component mới -> Dữ liệu cũ (aliveDays) sẽ tự động reset sạch sẽ.
+        */}
+        <AttendanceCalendar userId={userId} key={userId || 'guest'} />
+        
       </div>
     </main>
   );
