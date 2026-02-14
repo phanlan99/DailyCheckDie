@@ -19,3 +19,12 @@ export const attendance = pgTable("attendance", {
   isPresent: boolean("is_present").default(true),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// src/db/schema.ts
+export const posts = pgTable("posts", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  content: text("content").notNull(),
+  imageUrl: text("image_url"), // <--- THÊM CỘT NÀY (Lưu link ảnh)
+  createdAt: timestamp("created_at").defaultNow(),
+});

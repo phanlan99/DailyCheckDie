@@ -1,11 +1,19 @@
 'use server';
 
 import { db } from '@/db';
-import { attendance, users } from '@/db/schema';
-import { eq, and, gt } from 'drizzle-orm'; // Thêm gt (greater than) để so sánh thời gian
+import { attendance, users, posts } from '@/db/schema';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import nodemailer from 'nodemailer'; // Import thư viện gửi mail
+import nodemailer from 'nodemailer';
+import { v2 as cloudinary } from 'cloudinary'; // Import Cloudinary
+import { eq, and, gte, lt, desc, gt } from 'drizzle-orm';
+
+// --- CẤU HÌNH CLOUDINARY ---
+cloudinary.config({
+  cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 // =========================================================
 // PHẦN 1: QUẢN LÝ TÀI KHOẢN (ĐĂNG KÝ / ĐĂNG NHẬP / ĐĂNG XUẤT)
@@ -77,11 +85,8 @@ export async function logoutUser() {
 }
 
 // =========================================================
-// PHẦN 2: QUÊN MẬT KHẨU (OTP EMAIL) - MỚI THÊM
+// PHẦN 2: QUÊN MẬT KHẨU (OTP EMAIL)
 // =========================================================
-
-// 2.1. GỬI MÃ OTP
-
 
 export async function sendOtp(formData: FormData) {
   const email = formData.get('email') as string;
@@ -95,20 +100,16 @@ export async function sendOtp(formData: FormData) {
     return { error: "Email này chưa được đăng ký!" };
   }
 
-  // LẤY USERNAME RA ĐỂ TRẢ VỀ
   const foundUser = userList[0];
   const username = foundUser.username;
 
-  // Tạo mã OTP & Hạn sử dụng (Giữ nguyên logic cũ)
   const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
-  // Lưu vào Database
   await db.update(users)
     .set({ otp: otpCode, otpExpires: expiresAt })
     .where(eq(users.email, email));
 
-  // Gửi mail (Giữ nguyên logic cũ)
   const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
@@ -122,11 +123,10 @@ export async function sendOtp(formData: FormData) {
       from: `"GrowEveryDay App" <${process.env.GMAIL_USER}>`,
       to: email,
       subject: "Mã xác thực đổi mật khẩu",
-      text: `Chào ${username}, mã OTP của bạn là: ${otpCode}`, // Nhắc tên trong mail luôn cho thân thiện
+      text: `Chào ${username}, mã OTP của bạn là: ${otpCode}`,
       html: `<b>Chào ${username},</b><br>Mã OTP của bạn là: <span style="font-size: 20px; color: blue;">${otpCode}</span>`,
     });
     
-    // --- QUAN TRỌNG: Trả về cả username cho frontend ---
     return { success: true, email: email, username: username }; 
 
   } catch (error) {
@@ -135,9 +135,6 @@ export async function sendOtp(formData: FormData) {
   }
 }
 
-
-
-// 2.2. XÁC THỰC OTP VÀ ĐỔI MẬT KHẨU
 export async function resetPasswordWithOtp(formData: FormData) {
   const email = formData.get('email') as string;
   const otpInput = formData.get('otp') as string;
@@ -145,7 +142,6 @@ export async function resetPasswordWithOtp(formData: FormData) {
 
   if (!email || !otpInput || !newPassword) return { error: "Vui lòng điền đủ thông tin!" };
 
-  // Tìm user khớp Email, khớp OTP và OTP chưa hết hạn (otpExpires > Hiện tại)
   const userList = await db.select().from(users).where(
     and(
       eq(users.email, email),
@@ -158,7 +154,6 @@ export async function resetPasswordWithOtp(formData: FormData) {
     return { error: "Mã OTP không đúng hoặc đã hết hạn!" };
   }
 
-  // Cập nhật mật khẩu mới và XÓA OTP cũ đi (để không dùng lại được)
   await db.update(users)
     .set({ password: newPassword, otp: null, otpExpires: null })
     .where(eq(users.email, email));
@@ -167,7 +162,7 @@ export async function resetPasswordWithOtp(formData: FormData) {
 }
 
 // =========================================================
-// PHẦN 3: LOGIC ĐIỂM DANH (GIỮ NGUYÊN)
+// PHẦN 3: LOGIC ĐIỂM DANH
 // =========================================================
 
 export async function toggleAliveStatus(dateString: string) {
@@ -181,7 +176,6 @@ export async function toggleAliveStatus(dateString: string) {
 
   if (dateString !== today) throw new Error("Sai ngày!");
 
-  // Kiểm tra đã điểm danh chưa
   const existingRecord = await db.select().from(attendance).where(
     and(
       eq(attendance.date, dateString), 
@@ -190,7 +184,6 @@ export async function toggleAliveStatus(dateString: string) {
   );
 
   if (existingRecord.length > 0) {
-    // Hủy điểm danh
     await db.delete(attendance).where(
       and(
         eq(attendance.date, dateString), 
@@ -199,7 +192,6 @@ export async function toggleAliveStatus(dateString: string) {
     );
     return { status: "missing" };
   } else {
-    // Thêm điểm danh
     await db.insert(attendance).values({ 
       userId, 
       date: dateString, 
@@ -217,4 +209,87 @@ export async function getMonthlySurvival(month: number, year: number) {
   const userId = parseInt(userIdCookie.value);
   const records = await db.select().from(attendance).where(eq(attendance.userId, userId));
   return records.map(r => r.date);
+}
+
+// =========================================================
+// PHẦN 4: HÀM ĐĂNG BÀI VIẾT (CÓ ẢNH CLOUDINARY)
+// =========================================================
+
+export async function createPost(formData: FormData) {
+  const content = formData.get('content') as string;
+  const imageFile = formData.get('image') as File | null; // Lấy file ảnh
+  
+  // 1. Lấy User ID từ cookie
+  const cookieStore = await cookies();
+  const userIdCookie = cookieStore.get('userId');
+  if (!userIdCookie) return { error: "Bạn cần đăng nhập để đăng bài!" };
+  
+  const userId = parseInt(userIdCookie.value);
+
+  // 2. Validate: Phải có Content HOẶC có Ảnh
+  if ((!content || content.trim().length === 0) && (!imageFile || imageFile.size === 0)) {
+    return { error: "Bạn phải viết gì đó hoặc đăng ảnh!" };
+  }
+
+  // 3. Kiểm tra giới hạn 5 bài/ngày (CẬP NHẬT MỚI)
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()); 
+  const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+
+  // Lấy danh sách tất cả bài đã đăng trong hôm nay
+  const todayPosts = await db.select().from(posts).where(
+    and(
+      eq(posts.userId, userId),
+      gte(posts.createdAt, startOfDay),
+      lt(posts.createdAt, endOfDay)
+    )
+  );
+
+  // Kiểm tra số lượng
+  if (todayPosts.length >= 5) {
+    return { error: `Hôm nay bạn đã đăng ${todayPosts.length}/5 bài. Hãy quay lại vào ngày mai nhé!` };
+  }
+
+  // 4. Xử lý Upload ảnh lên Cloudinary (Nếu có ảnh)
+  let imageUrl = null;
+
+  if (imageFile && imageFile.size > 0) {
+    try {
+      // Chuyển File object thành Buffer
+      const arrayBuffer = await imageFile.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+
+      // Upload lên Cloudinary
+      const uploadResult: any = await new Promise((resolve, reject) => {
+        cloudinary.uploader.upload_stream(
+          {
+            folder: `dailyday/user_${userId}`, // Thư mục riêng cho user
+            resource_type: "auto",
+          },
+          (error, result) => {
+            if (error) reject(error);
+            else resolve(result);
+          }
+        ).end(buffer);
+      });
+
+      imageUrl = uploadResult.secure_url; // Lấy link ảnh HTTPS
+
+    } catch (error) {
+      console.log("Lỗi upload ảnh:", error);
+      return { error: "Không thể tải ảnh lên. Thử lại sau!" };
+    }
+  }
+
+  // 5. Lưu bài viết vào Database
+  try {
+    await db.insert(posts).values({
+      userId: userId,
+      content: content || "", // Nội dung có thể rỗng nếu chỉ đăng ảnh
+      imageUrl: imageUrl,     // Lưu link ảnh (nếu có)
+    });
+    return { success: true };
+  } catch (err) {
+    return { error: "Lỗi hệ thống khi đăng bài." };
+  }
 }

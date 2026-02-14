@@ -19,6 +19,7 @@ const Navbar = ({ userId, username }: NavbarProps) => {
   const menuItems = [
     { name: 'Điểm danh', href: '/' },
     { name: 'Xếp hạng', href: '/rank' },
+    { name: 'Bảng tin', href: '/feed' },
     { name: 'Mục tiêu', href: '/goals' },
     { name: 'Dự án', href: '/projects' },
   ];
