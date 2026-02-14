@@ -1,10 +1,17 @@
 "use client";
 
 import { useState, useEffect } from "react";
-// Đảm bảo bạn đã import đúng đường dẫn tới file actions
-import { toggleAliveStatus, getMonthlySurvival } from "@/app/actions"; 
+import { useRouter } from "next/navigation";
+import { toggleAliveStatus, getMonthlySurvival } from "@/app/actions";
 
-const AttendanceCalendar = () => {
+// 1. Định nghĩa Props để nhận userId từ Server Component
+interface Props {
+  userId?: string; // Có thể undefined nếu chưa đăng nhập
+}
+
+const AttendanceCalendar = ({ userId }: Props) => {
+  const router = useRouter();
+
   const [currentDate, setCurrentDate] = useState(new Date());
   const [aliveDays, setAliveDays] = useState<string[]>([]);
 
@@ -17,12 +24,18 @@ const AttendanceCalendar = () => {
 
   // Load dữ liệu khi tháng thay đổi
   useEffect(() => {
-    const fetchData = async () => {
-      const data = await getMonthlySurvival(month, year);
-      setAliveDays(data);
-    };
-    fetchData();
-  }, [month, year]);
+    // 2. Chỉ gọi API lấy dữ liệu khi ĐÃ CÓ userId
+    if (userId) {
+      const fetchData = async () => {
+        const data = await getMonthlySurvival(month, year);
+        setAliveDays(data);
+      };
+      fetchData();
+    } else {
+      // Nếu không có user (đăng xuất), reset dữ liệu hiển thị
+      setAliveDays([]);
+    }
+  }, [month, year, userId]); // Thêm userId vào dependencies
 
   const changeMonth = (offset: number) => {
     const newDate = new Date(currentDate.setMonth(currentDate.getMonth() + offset));
@@ -30,19 +43,27 @@ const AttendanceCalendar = () => {
   };
 
   const handleCheckIn = async (day: number) => {
+    // --- 3. KIỂM TRA ĐĂNG NHẬP DỰA TRÊN USERID ---
+    if (!userId) {
+      if (confirm("Bạn cần đăng nhập để điểm danh! Chuyển đến trang đăng nhập nhé?")) {
+        router.push("/login"); // Chuyển hướng sang trang login
+      }
+      return; // Dừng hàm lại
+    }
+
     const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
     // --- CHẶN CLICK: Nếu không phải hôm nay thì không làm gì cả ---
     if (dateKey !== todayString) {
-      return; 
+      return;
     }
 
     // Optimistic UI update (Cập nhật giao diện trước cho mượt)
     const isCurrentlyAlive = aliveDays.includes(dateKey);
     const newAliveList = isCurrentlyAlive
-      ? aliveDays.filter(d => d !== dateKey)
+      ? aliveDays.filter((d) => d !== dateKey)
       : [...aliveDays, dateKey];
-    
+
     setAliveDays(newAliveList);
 
     // Gọi Server Action
@@ -102,16 +123,16 @@ const AttendanceCalendar = () => {
         {Array.from({ length: daysInMonth }).map((_, index) => {
           const day = index + 1;
           const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-          
+
           const isAlive = aliveDays.includes(dateKey); // Đã điểm danh?
           const isToday = dateKey === todayString;     // Có phải hôm nay?
-          
+
           // Logic hiển thị chữ
           let statusText = isAlive ? "Còn sống" : "Mất tích";
-          
+
           // Logic class CSS
           let containerClass = "bg-gray-100 border-gray-200 text-gray-500"; // Mặc định (Xám/Mất tích)
-          
+
           if (isAlive) {
             containerClass = "bg-blue-500 border-blue-600 text-white shadow-md"; // Xanh dương (Còn sống)
           }
@@ -120,15 +141,15 @@ const AttendanceCalendar = () => {
           if (isToday) {
             // Thêm viền cam đậm
             containerClass += " border-2 border-orange-500 relative";
-            
+
             // Nếu chưa điểm danh thì đổi chữ nhắc nhở
             if (!isAlive) {
-                statusText = "Điểm danh ngay!";
-                containerClass += " bg-orange-50 text-orange-600 animate-pulse"; // Nhấp nháy nhẹ nền cam nhạt
+              statusText = "Điểm danh ngay!";
+              containerClass += " bg-orange-50 text-orange-600 animate-pulse"; // Nhấp nháy nhẹ nền cam nhạt
             }
           } else {
-             // Các ngày khác thì mờ đi 1 chút nếu chưa điểm danh
-             if (!isAlive) containerClass += " opacity-70";
+            // Các ngày khác thì mờ đi 1 chút nếu chưa điểm danh
+            if (!isAlive) containerClass += " opacity-70";
           }
 
           return (

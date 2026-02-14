@@ -1,19 +1,21 @@
 // src/components/Navbar.tsx
-"use client"; // Chuyển thành Client Component để xử lý sự kiện click
+"use client";
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { logoutUser } from '@/app/actions';
 
-const Navbar = () => {
+// Thêm username vào interface Props
+interface NavbarProps {
+  userId?: string;
+  username?: string; // Thêm dòng này
+}
+
+const Navbar = ({ userId, username }: NavbarProps) => {
   const pathname = usePathname();
-  
-  // Tạm thời hardcode biến này để test giao diện. 
-  // Sau này khi cài NextAuth, ta sẽ lấy từ session.
-  const isLoggedIn = false; 
-  const userName = "Nguyễn Văn A";
 
   const menuItems = [
-    { name: 'Điểm danh', href: '/' }, // Trang chủ là trang điểm danh
+    { name: 'Điểm danh', href: '/' },
     { name: 'Mục tiêu', href: '/goals' },
     { name: 'Dự án', href: '/projects' },
   ];
@@ -47,15 +49,27 @@ const Navbar = () => {
             ))}
           </div>
 
-          {/* Khu vực User (Đăng nhập/Đăng ký) */}
+          {/* Khu vực User */}
           <div className="flex items-center space-x-4">
-            {isLoggedIn ? (
+            {userId ? (
               // Trạng thái ĐÃ ĐĂNG NHẬP
               <div className="flex items-center gap-3">
-                <span className="text-sm font-medium text-gray-700">
-                  Chào, {userName}
-                </span>
-                <button className="text-sm bg-gray-100 hover:bg-gray-200 text-gray-600 px-4 py-2 rounded-lg transition">
+                {/* Hiển thị Avatar giả lập + Tên User */}
+                <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xs border border-blue-200">
+                        {username ? username.charAt(0).toUpperCase() : "U"}
+                    </div>
+                    <span className="text-sm font-bold text-gray-700 hidden sm:block">
+                    {username}
+                    </span>
+                </div>
+
+                <div className="h-4 w-[1px] bg-gray-300 mx-1"></div> {/* Đường gạch ngăn cách */}
+
+                <button 
+                  onClick={() => logoutUser()} 
+                  className="text-sm text-red-500 hover:text-red-700 font-medium px-2 py-2 transition"
+                >
                   Đăng xuất
                 </button>
               </div>

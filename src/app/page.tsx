@@ -1,19 +1,46 @@
 // src/app/page.tsx
 import Navbar from "@/components/Navbar";
-import AttendanceCalendar from "@/components/AttendanceCalendar"; // Import vào
+import AttendanceCalendar from "@/components/AttendanceCalendar";
+import { cookies } from "next/headers";
+import { db } from "@/db";          // Import db
+import { users } from "@/db/schema"; // Import bảng users
+import { eq } from "drizzle-orm";    // Import hàm so sánh
 
-export default function Home() {
+export default async function Home() {
+  // 1. Lấy Cookie
+  const cookieStore = await cookies();
+  const userIdCookie = cookieStore.get("userId");
+  const userId = userIdCookie?.value;
+
+  // 2. Lấy Tên User (Username) từ Database
+  let username = null;
+  if (userId) {
+    try {
+      const userList = await db.select().from(users).where(eq(users.id, parseInt(userId)));
+      if (userList.length > 0) {
+        username = userList[0].username; // Lấy tên user
+      }
+    } catch (e) {
+      console.log("Lỗi lấy user:", e);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-gray-50 pb-20">
-      <Navbar />
+      {/* 3. Truyền cả userId và username xuống Navbar */}
+      <Navbar userId={userId} username={username || undefined} />
 
       <div className="max-w-7xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
-        
-        
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">Bảng Điểm Danh</h1>
+          <p className="mt-2 text-gray-600">
+            {username 
+              ? `Chào mừng ${username} quay lại! Hôm nay bạn thế nào?` 
+              : "Bạn đang xem ở chế độ khách. Hãy đăng nhập để lưu dữ liệu nhé!"}
+          </p>
+        </div>
 
-        {/* Hiển thị Component Lịch */}
-        <AttendanceCalendar />
-
+        <AttendanceCalendar userId={userId} />
       </div>
     </main>
   );
