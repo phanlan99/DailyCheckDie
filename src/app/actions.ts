@@ -5,7 +5,7 @@ import { attendance, users, posts } from '@/db/schema';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import nodemailer from 'nodemailer';
-import { v2 as cloudinary } from 'cloudinary'; // Import Cloudinary
+import { v2 as cloudinary } from 'cloudinary'; 
 import { eq, and, gte, lt, desc, gt } from 'drizzle-orm';
 
 // --- CẤU HÌNH CLOUDINARY ---
@@ -26,11 +26,9 @@ export async function registerUser(formData: FormData) {
 
   if (!username || !password) return { error: "Thiếu tên hoặc mật khẩu!" };
 
-  // Kiểm tra trùng lặp Username
   const existingUser = await db.select().from(users).where(eq(users.username, username));
   if (existingUser.length > 0) return { error: "Tên đăng nhập đã tồn tại!" };
 
-  // Kiểm tra trùng lặp Email (Nếu có nhập email)
   if (email) {
     const existingEmail = await db.select().from(users).where(eq(users.email, email));
     if (existingEmail.length > 0) return { error: "Email này đã được sử dụng!" };
@@ -46,7 +44,6 @@ export async function registerUser(formData: FormData) {
     return { error: "Lỗi hệ thống khi đăng ký" };
   }
   
-  // Đăng ký xong thì tự động đăng nhập luôn
   return loginUser(formData);
 }
 
@@ -67,12 +64,11 @@ export async function loginUser(formData: FormData) {
 
   const user = userList[0];
 
-  // Tạo Cookie phiên đăng nhập
   const cookieStore = await cookies();
   cookieStore.set('userId', user.id.toString(), {
     httpOnly: true,
     path: '/',
-    maxAge: 60 * 60 * 24 * 7, // 7 ngày
+    maxAge: 60 * 60 * 24 * 7, 
   });
 
   redirect('/');
@@ -93,7 +89,6 @@ export async function sendOtp(formData: FormData) {
 
   if (!email) return { error: "Vui lòng nhập email!" };
 
-  // Kiểm tra email có tồn tại không
   const userList = await db.select().from(users).where(eq(users.email, email));
   
   if (userList.length === 0) {
@@ -212,31 +207,61 @@ export async function getMonthlySurvival(month: number, year: number) {
 }
 
 // =========================================================
-// PHẦN 4: HÀM ĐĂNG BÀI VIẾT (CÓ ẢNH CLOUDINARY)
+// PHẦN 4: HÀM HỖ TRỢ UPLOAD CLIENT-SIDE (MỚI THÊM)
+// =========================================================
+
+export async function getCloudinarySignature() {
+  const cookieStore = await cookies();
+  const userIdCookie = cookieStore.get('userId');
+  if (!userIdCookie) throw new Error("Unauthorized");
+  
+  const userId = userIdCookie.value;
+
+  // Cấu hình tham số upload để tạo chữ ký
+  const timestamp = Math.round(new Date().getTime() / 1000);
+  const folder = `dailyday/user_${userId}`; // Thư mục riêng cho user
+
+  // Tạo chữ ký bảo mật bằng API Secret (Server-side only)
+  const signature = cloudinary.utils.api_sign_request({
+    timestamp: timestamp,
+    folder: folder,
+  }, process.env.CLOUDINARY_API_SECRET!);
+
+  // Trả về thông tin cần thiết cho Client để tự upload
+  return {
+    timestamp,
+    folder,
+    signature,
+    apiKey: process.env.CLOUDINARY_API_KEY,
+    cloudName: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME
+  };
+}
+
+// =========================================================
+// PHẦN 5: HÀM ĐĂNG BÀI VIẾT (CẬP NHẬT: NHẬN LINK ẢNH)
 // =========================================================
 
 export async function createPost(formData: FormData) {
   const content = formData.get('content') as string;
-  const imageFile = formData.get('image') as File | null; // Lấy file ảnh
+  // LƯU Ý: Nhận URL ảnh (chuỗi) từ Client gửi lên, không phải File
+  const imageUrl = formData.get('imageUrl') as string | null; 
   
-  // 1. Lấy User ID từ cookie
   const cookieStore = await cookies();
   const userIdCookie = cookieStore.get('userId');
   if (!userIdCookie) return { error: "Bạn cần đăng nhập để đăng bài!" };
   
   const userId = parseInt(userIdCookie.value);
 
-  // 2. Validate: Phải có Content HOẶC có Ảnh
-  if ((!content || content.trim().length === 0) && (!imageFile || imageFile.size === 0)) {
+  // Validate: Phải có Content HOẶC có Ảnh
+  if ((!content || content.trim().length === 0) && !imageUrl) {
     return { error: "Bạn phải viết gì đó hoặc đăng ảnh!" };
   }
 
-  // 3. Kiểm tra giới hạn 5 bài/ngày (CẬP NHẬT MỚI)
+  // Kiểm tra giới hạn 5 bài/ngày
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()); 
   const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
 
-  // Lấy danh sách tất cả bài đã đăng trong hôm nay
   const todayPosts = await db.select().from(posts).where(
     and(
       eq(posts.userId, userId),
@@ -245,48 +270,16 @@ export async function createPost(formData: FormData) {
     )
   );
 
-  // Kiểm tra số lượng
   if (todayPosts.length >= 5) {
     return { error: `Hôm nay bạn đã đăng ${todayPosts.length}/5 bài. Hãy quay lại vào ngày mai nhé!` };
   }
 
-  // 4. Xử lý Upload ảnh lên Cloudinary (Nếu có ảnh)
-  let imageUrl = null;
-
-  if (imageFile && imageFile.size > 0) {
-    try {
-      // Chuyển File object thành Buffer
-      const arrayBuffer = await imageFile.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-
-      // Upload lên Cloudinary
-      const uploadResult: any = await new Promise((resolve, reject) => {
-        cloudinary.uploader.upload_stream(
-          {
-            folder: `dailyday/user_${userId}`, // Thư mục riêng cho user
-            resource_type: "auto",
-          },
-          (error, result) => {
-            if (error) reject(error);
-            else resolve(result);
-          }
-        ).end(buffer);
-      });
-
-      imageUrl = uploadResult.secure_url; // Lấy link ảnh HTTPS
-
-    } catch (error) {
-      console.log("Lỗi upload ảnh:", error);
-      return { error: "Không thể tải ảnh lên. Thử lại sau!" };
-    }
-  }
-
-  // 5. Lưu bài viết vào Database
+  // Lưu bài viết vào Database (Chỉ lưu link ảnh)
   try {
     await db.insert(posts).values({
       userId: userId,
-      content: content || "", // Nội dung có thể rỗng nếu chỉ đăng ảnh
-      imageUrl: imageUrl,     // Lưu link ảnh (nếu có)
+      content: content || "",
+      imageUrl: imageUrl, // Lưu link ảnh từ Client
     });
     return { success: true };
   } catch (err) {

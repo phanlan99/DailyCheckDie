@@ -1,7 +1,7 @@
 "use client";
 
-import { createPost } from "@/app/actions";
-import { useState, useRef } from "react"; // Dùng useRef để reset input file
+import { createPost, getCloudinarySignature } from "@/app/actions"; // Import thêm hàm lấy chữ ký
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 
@@ -12,15 +12,17 @@ export default function PostForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null); // State lưu file thật để upload
 
-  // Xử lý khi chọn ảnh để hiển thị Preview
+  // Xử lý khi chọn ảnh
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Tạo URL tạm thời để hiện ảnh ngay lập tức
+      setSelectedFile(file); // Lưu file vào state
       const url = URL.createObjectURL(file);
       setPreviewUrl(url);
     } else {
+      setSelectedFile(null);
       setPreviewUrl(null);
     }
   };
@@ -30,24 +32,76 @@ export default function PostForm() {
     setIsLoading(true);
     setError(null);
 
-    const formData = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const formData = new FormData(formElement);
+    
+    let uploadedImageUrl = "";
+
+    // --- BƯỚC 1: UPLOAD ẢNH LÊN CLOUDINARY (CLIENT-SIDE) ---
+    if (selectedFile) {
+      try {
+        // 1. Xin chữ ký bảo mật từ Server
+        const { signature, timestamp, folder, apiKey, cloudName } = await getCloudinarySignature();
+
+        // 2. Chuẩn bị dữ liệu gửi lên Cloudinary
+        const uploadData = new FormData();
+        uploadData.append('file', selectedFile);
+        uploadData.append('api_key', apiKey!);
+        uploadData.append('timestamp', timestamp.toString());
+        uploadData.append('signature', signature);
+        uploadData.append('folder', folder);
+
+        // 3. Gọi API Cloudinary trực tiếp từ trình duyệt
+        const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+          method: 'POST',
+          body: uploadData,
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error?.message || "Upload failed");
+        }
+
+        uploadedImageUrl = data.secure_url; // Lấy được Link ảnh HTTPS
+        
+      } catch (err) {
+        console.error(err);
+        setError("Lỗi khi tải ảnh lên Cloudinary. Vui lòng thử lại.");
+        setIsLoading(false);
+        return; // Dừng lại nếu upload lỗi
+      }
+    }
+
+    // --- BƯỚC 2: GỬI LINK ẢNH VÀ NỘI DUNG VỀ SERVER ---
+    
+    // Xóa file ảnh gốc khỏi formData gửi về server (để server không phải nhận file nặng)
+    formData.delete('image'); 
+    
+    // Thêm link ảnh vừa có được vào formData
+    if (uploadedImageUrl) {
+        formData.append('imageUrl', uploadedImageUrl);
+    }
+
+    // Gọi Server Action để lưu bài viết
     const result = await createPost(formData);
 
     if (result?.error) {
       setError(result.error);
       setIsLoading(false);
     } else if (result?.success) {
-      (event.target as HTMLFormElement).reset();
-      setPreviewUrl(null); // Xóa preview
+      formElement.reset();
+      setPreviewUrl(null);
+      setSelectedFile(null);
       setIsLoading(false);
-      router.refresh();
+      router.refresh(); // Làm mới trang để hiện bài mới
     }
   }
 
   return (
     <form onSubmit={handleSubmit} className="relative">
       <h3 className="text-sm font-semibold text-gray-700 mb-3">
-        Hôm nay bạn có ảnh gì khoe không?
+        Hôm nay bạn có ảnh gì khoe không? (HD & 4K thoải mái)
       </h3>
       
       {error && (
@@ -56,7 +110,6 @@ export default function PostForm() {
         </div>
       )}
 
-      {/* Input nhập Text */}
       <textarea
         name="content"
         rows={3}
@@ -64,14 +117,14 @@ export default function PostForm() {
         className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 text-sm resize-none bg-gray-50 focus:bg-white transition"
       />
 
-      {/* Khu vực hiển thị Preview ảnh */}
+      {/* Preview Ảnh */}
       {previewUrl && (
         <div className="mt-3 relative w-full h-48 bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
-           {/* Nút xóa ảnh */}
            <button 
              type="button"
              onClick={() => {
                 setPreviewUrl(null);
+                setSelectedFile(null);
                 if (fileInputRef.current) fileInputRef.current.value = "";
              }}
              className="absolute top-2 right-2 bg-black/50 text-white rounded-full p-1 hover:bg-black/70 z-10"
@@ -84,14 +137,12 @@ export default function PostForm() {
              src={previewUrl} 
              alt="Preview" 
              fill 
-             className="object-contain" // Hiển thị trọn vẹn ảnh
+             className="object-contain"
            />
         </div>
       )}
 
-      {/* Thanh công cụ bên dưới */}
       <div className="mt-3 flex justify-between items-center">
-        {/* Nút chọn ảnh */}
         <div className="flex items-center">
           <label 
             htmlFor="image-upload" 
@@ -102,6 +153,7 @@ export default function PostForm() {
             </svg>
             <span className="text-sm font-medium">Thêm ảnh</span>
           </label>
+          {/* Input file vẫn cần thiết để chọn ảnh, nhưng name="image" sẽ bị xóa trước khi gửi về server */}
           <input 
             id="image-upload" 
             name="image" 
@@ -113,16 +165,15 @@ export default function PostForm() {
           />
         </div>
 
-        {/* Nút Đăng */}
         <button
           type="submit"
           disabled={isLoading}
           className={`
             px-6 py-2 rounded-full text-sm font-bold text-white shadow-sm transition-all
-            ${isLoading ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700 hover:shadow-md"}
+            ${isLoading ? "bg-gray-400 cursor-wait" : "bg-blue-600 hover:bg-blue-700 hover:shadow-md"}
           `}
         >
-          {isLoading ? "Đang tải lên..." : "Đăng bài"}
+          {isLoading ? "Đang xử lý..." : "Đăng bài"}
         </button>
       </div>
     </form>
