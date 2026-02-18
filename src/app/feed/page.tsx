@@ -10,7 +10,11 @@ import PostForm from "@/components/PostForm";
 function formatTime(date: Date | null) {
   if (!date) return "";
   return new Intl.DateTimeFormat('vi-VN', {
-    hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit'
+    hour: '2-digit', 
+    minute: '2-digit', 
+    day: '2-digit', 
+    month: '2-digit',
+    timeZone: 'Asia/Ho_Chi_Minh' // <--- QUAN TRỌNG: Ép về giờ Việt Nam
   }).format(date);
 }
 
@@ -32,7 +36,7 @@ export default async function FeedPage() {
     .select({
       id: posts.id,
       content: posts.content,
-      imageUrl: posts.imageUrl, // <--- LẤY THÊM CỘT ẢNH
+      imageUrl: posts.imageUrl, // Lấy link ảnh
       createdAt: posts.createdAt,
       username: users.username, 
       userId: users.id,
@@ -100,7 +104,7 @@ export default async function FeedPage() {
                       </p>
                     )}
 
-                    {/* Image content (CẬP NHẬT: Responsive giữ tỷ lệ gốc) */}
+                    {/* Image content (Responsive giữ tỷ lệ gốc) */}
                     {post.imageUrl && (
                       <div className="mt-3 w-full rounded-lg overflow-hidden border border-gray-100 bg-gray-50">
                         <Image 

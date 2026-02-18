@@ -243,7 +243,6 @@ export async function getCloudinarySignature() {
 
 export async function createPost(formData: FormData) {
   const content = formData.get('content') as string;
-  // LƯU Ý: Nhận URL ảnh (chuỗi) từ Client gửi lên, không phải File
   const imageUrl = formData.get('imageUrl') as string | null; 
   
   const cookieStore = await cookies();
@@ -257,11 +256,23 @@ export async function createPost(formData: FormData) {
     return { error: "Bạn phải viết gì đó hoặc đăng ảnh!" };
   }
 
-  // Kiểm tra giới hạn 5 bài/ngày
+  // --- LOGIC MỚI: TÍNH NGÀY THEO GIỜ VIỆT NAM (UTC+7) ---
   const now = new Date();
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()); 
-  const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  
+  // 1. Giả lập giờ VN bằng cách cộng thêm 7 tiếng vào giờ UTC hiện tại
+  const vnTime = new Date(now.getTime() + 7 * 60 * 60 * 1000);
+  
+  // 2. Reset về 00:00:00 đầu ngày (Lúc này đang là 00:00 của giờ VN)
+  vnTime.setUTCHours(0, 0, 0, 0);
+  
+  // 3. Trừ lại 7 tiếng để ra thời điểm chính xác trong Database (Database lưu UTC)
+  // (Ví dụ: 00:00 VN tương đương 17:00 hôm trước của UTC)
+  const startOfDay = new Date(vnTime.getTime() - 7 * 60 * 60 * 1000);
+  
+  // 4. Thời điểm cuối ngày là 24h sau đó
+  const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
 
+  // Lấy danh sách các bài đã đăng trong khoảng thời gian này
   const todayPosts = await db.select().from(posts).where(
     and(
       eq(posts.userId, userId),
@@ -274,12 +285,12 @@ export async function createPost(formData: FormData) {
     return { error: `Hôm nay bạn đã đăng ${todayPosts.length}/5 bài. Hãy quay lại vào ngày mai nhé!` };
   }
 
-  // Lưu bài viết vào Database (Chỉ lưu link ảnh)
+  // Lưu bài viết vào Database
   try {
     await db.insert(posts).values({
       userId: userId,
       content: content || "",
-      imageUrl: imageUrl, // Lưu link ảnh từ Client
+      imageUrl: imageUrl, 
     });
     return { success: true };
   } catch (err) {
