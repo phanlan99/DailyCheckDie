@@ -20,6 +20,7 @@ const Navbar = ({ userId, username }: NavbarProps) => {
     { name: 'Điểm danh', href: '/' },
     { name: 'Xếp hạng', href: '/rank' },
     { name: 'Bảng tin', href: '/feed' },
+    { name: 'Cá nhân', href: '/my-posts' },
     { name: 'Mục tiêu', href: '/goals' },
     { name: 'Dự án', href: '/projects' },
   ];

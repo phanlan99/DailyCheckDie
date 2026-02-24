@@ -2,10 +2,10 @@ import { db } from "@/db";
 import { posts, users } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { cookies } from "next/headers";
+import Link from "next/link"; // <--- IMPORT LINK
 import Navbar from "@/components/Navbar";
 import PostForm from "@/components/PostForm"; 
-
-import ImageGallery from "@/components/ImageGallery"; // <--- IMPORT COMPONENT MỚI
+import ImageGallery from "@/components/ImageGallery";
 
 // Helper format thời gian
 function formatTime(date: Date | null) {
@@ -88,7 +88,14 @@ export default async function FeedPage() {
                     {/* Tên & Thời gian */}
                     <div className="flex justify-between items-start mb-2">
                       <div>
-                        <span className="font-bold text-gray-900 mr-2">{post.username}</span>
+                        {/* --- BỌC TÊN USER BẰNG LINK --- */}
+                        <Link 
+                          href={`/user/${post.userId}`} 
+                          className="font-bold text-gray-900 mr-2 hover:text-blue-600 hover:underline transition-colors"
+                        >
+                          {post.username}
+                        </Link>
+                        
                         {post.userId === userId && (
                            <span className="bg-blue-100 text-blue-800 text-[10px] px-2 py-0.5 rounded-full font-bold">Bạn</span>
                         )}
