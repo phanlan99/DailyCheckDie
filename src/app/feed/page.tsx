@@ -3,8 +3,9 @@ import { posts, users } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import Navbar from "@/components/Navbar";
-import Image from "next/image"; // Import Image để hiển thị ảnh
 import PostForm from "@/components/PostForm"; 
+
+import ImageGallery from "@/components/ImageGallery"; // <--- IMPORT COMPONENT MỚI
 
 // Helper format thời gian
 function formatTime(date: Date | null) {
@@ -36,7 +37,7 @@ export default async function FeedPage() {
     .select({
       id: posts.id,
       content: posts.content,
-      images: posts.images, // <--- CẬP NHẬT: Lấy cột images (chứa mảng JSON)
+      images: posts.images, // Lấy cột images (chứa mảng JSON)
       createdAt: posts.createdAt,
       username: users.username, 
       userId: users.id,
@@ -104,27 +105,8 @@ export default async function FeedPage() {
                       </p>
                     )}
 
-                    {/* --- HIỂN THỊ ALBUM ẢNH (CẬP NHẬT) --- */}
-                    {post.images && Array.isArray(post.images) && post.images.length > 0 && (
-                      <div className={`
-                        mt-3 w-full grid gap-1 rounded-lg overflow-hidden border border-gray-100
-                        ${post.images.length === 1 ? 'grid-cols-1' : 'grid-cols-2'} 
-                      `}>
-                        {post.images.map((imgUrl, index) => (
-                          <div key={index} className="relative w-full">
-                            <Image 
-                               src={imgUrl} 
-                               alt={`Photo ${index}`}
-                               width={0} 
-                               height={0} 
-                               sizes="100vw"
-                               style={{ width: '100%', height: 'auto', objectFit: 'cover' }}
-                               className="hover:opacity-95 transition"
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    {/* --- HIỂN THỊ ALBUM ẢNH BẰNG COMPONENT CON --- */}
+                    <ImageGallery images={post.images as string[] | null} />
 
                   </div>
                 </div>
