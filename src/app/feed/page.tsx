@@ -3,7 +3,7 @@ import { posts, users } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import Link from "next/link"; 
-import Image from "next/image"; // <-- THÊM IMPORT IMAGE Ở ĐÂY
+import Image from "next/image"; 
 import Navbar from "@/components/Navbar";
 import PostForm from "@/components/PostForm"; 
 import ImageGallery from "@/components/ImageGallery";
@@ -21,16 +21,24 @@ function formatTime(date: Date | null) {
 }
 
 export default async function FeedPage() {
-  // 1. Lấy thông tin User hiện tại
   const cookieStore = await cookies();
   const userIdCookie = cookieStore.get("userId");
   const userId = userIdCookie ? parseInt(userIdCookie.value) : null;
 
-  // Lấy tên User để hiển thị Navbar
+  // 1. LẤY THÊM AVATAR URL CHO NAVBAR
   let currentUsername = undefined;
+  let currentUserAvatar = null; // Biến lưu ảnh
+
   if (userId) {
     const u = await db.select().from(users).where(eq(users.id, userId));
-    if (u.length > 0) currentUsername = u[0].username;
+    if (u.length > 0) {
+      currentUsername = u[0].username;
+      
+      // Lấy ảnh mới nhất từ mảng avatarUrls của user đang đăng nhập
+      if (u[0].avatarUrls && Array.isArray(u[0].avatarUrls) && u[0].avatarUrls.length > 0) {
+        currentUserAvatar = u[0].avatarUrls[u[0].avatarUrls.length - 1] as string;
+      }
+    }
   }
 
   // 2. Lấy danh sách bài viết (Mới nhất lên đầu)
@@ -43,7 +51,7 @@ export default async function FeedPage() {
       createdAt: posts.createdAt,
       username: users.username, 
       userId: users.id,
-      avatarUrls: users.avatarUrls, // <--- THÊM DÒNG NÀY (Lấy lịch sử avatar)
+      avatarUrls: users.avatarUrls, // Lấy lịch sử avatar của người đăng bài
     })
     .from(posts)
     .innerJoin(users, eq(posts.userId, users.id))
@@ -51,7 +59,13 @@ export default async function FeedPage() {
 
   return (
     <main className="min-h-screen bg-gray-100 pb-20">
-      <Navbar userId={userId?.toString()} username={currentUsername} />
+      
+      {/* 3. TRUYỀN avatarUrl VÀO NAVBAR */}
+      <Navbar 
+         userId={userId?.toString()} 
+         username={currentUsername} 
+         avatarUrl={currentUserAvatar} 
+      />
 
       <div className="max-w-2xl mx-auto py-8 px-4">
         
@@ -79,10 +93,9 @@ export default async function FeedPage() {
               <div key={post.id} className="bg-white rounded-xl shadow-sm p-5 border border-gray-100 transition hover:shadow-md">
                 <div className="flex items-start gap-3">
                   
-                  {/* --- HIỂN THỊ AVATAR MỚI NHẤT --- */}
+                  {/* --- HIỂN THỊ AVATAR MỚI NHẤT TRONG BÀI VIẾT --- */}
                   <div className="flex-shrink-0">
                     {(() => {
-                      // Lấy ảnh cuối cùng trong mảng
                       const latestAvatar = (post.avatarUrls && Array.isArray(post.avatarUrls) && post.avatarUrls.length > 0) 
                         ? post.avatarUrls[post.avatarUrls.length - 1] 
                         : null;
@@ -95,7 +108,6 @@ export default async function FeedPage() {
                         );
                       }
                       
-                      // Nếu không có ảnh thì hiện chữ cái đầu như cũ
                       return (
                         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold shadow-sm">
                           {post.username.charAt(0).toUpperCase()}
@@ -139,9 +151,9 @@ export default async function FeedPage() {
                       let displayImages: string[] = [];
                       
                       if (post.images && Array.isArray(post.images) && post.images.length > 0) {
-                        displayImages = post.images as string[]; // Dùng ảnh mới
+                        displayImages = post.images as string[]; 
                       } else if (post.oldImage) {
-                        displayImages = [post.oldImage as string]; // Dùng ảnh cũ (chuyển thành mảng 1 phần tử)
+                        displayImages = [post.oldImage as string]; 
                       }
 
                       return <ImageGallery images={displayImages} />;

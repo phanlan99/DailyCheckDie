@@ -3,10 +3,10 @@ import { posts, users } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import Navbar from "@/components/Navbar";
-import { redirect, notFound } from "next/navigation"; 
+import { redirect, notFound } from "next/navigation"; // <-- IMPORT THÊM notFound
 import ImageGallery from "@/components/ImageGallery";
 import DeletePostButton from "@/components/DeletePostButton";
-import EditableProfileHeader from "@/components/EditableProfileHeader"; 
+import EditableProfileHeader from "@/components/EditableProfileHeader"; // <-- IMPORT COMPONENT MỚI
 
 function formatTime(date: Date | null) {
   if (!date) return "";
@@ -32,6 +32,7 @@ export default async function MyPostsPage() {
   if (!currentUser) return notFound();
 
   // --- LOGIC LẤY ẢNH MỚI NHẤT TỪ LỊCH SỬ ---
+  // Lấy phần tử cuối cùng trong mảng. Nếu mảng rỗng hoặc bị null thì trả về null
   const latestAvatar = (currentUser.avatarUrls && Array.isArray(currentUser.avatarUrls) && currentUser.avatarUrls.length > 0) 
     ? currentUser.avatarUrls[currentUser.avatarUrls.length - 1] 
     : null;
@@ -40,20 +41,19 @@ export default async function MyPostsPage() {
     ? currentUser.coverUrls[currentUser.coverUrls.length - 1] 
     : null;
 
-  // 2. LẤY BÀI VIẾT: Chỉ lấy bài của chính mình
+  // 2. LẤY BÀI VIẾT: Chỉ lấy bài của chính mình (eq(posts.userId, currentUserId))
   const myPosts = await db
     .select({
       id: posts.id,
       content: posts.content,
-      images: posts.images,       // Lấy mảng ảnh mới
-      oldImage: posts.oldImage,   // LẤY THÊM ẢNH CŨ
+      images: posts.images,
       createdAt: posts.createdAt,
       username: users.username,
-      avatarUrls: users.avatarUrls, 
+      avatarUrls: users.avatarUrls, // Lấy mảng avatar của người đăng bài để đồng bộ dữ liệu
     })
     .from(posts)
     .innerJoin(users, eq(posts.userId, users.id))
-    .where(eq(posts.userId, currentUserId)) 
+    .where(eq(posts.userId, currentUserId)) // <-- BỘ LỌC Ở ĐÂY
     .orderBy(desc(posts.createdAt));
 
   return (
@@ -92,19 +92,8 @@ export default async function MyPostsPage() {
                   </p>
                 )}
 
-                {/* --- XỬ LÝ GỘP ẢNH: Ưu tiên ảnh mới, nếu không có thì lấy ảnh cũ --- */}
-                {(() => {
-                  let displayImages: string[] = [];
-                  
-                  if (post.images && Array.isArray(post.images) && post.images.length > 0) {
-                    displayImages = post.images as string[]; // Dùng ảnh mới
-                  } else if (post.oldImage) {
-                    displayImages = [post.oldImage as string]; // Dùng ảnh cũ (chuyển thành mảng 1 phần tử)
-                  }
-
-                  return <ImageGallery images={displayImages} />;
-                })()}
-
+                {/* Gọi Component ImageGallery để hiển thị ảnh */}
+                <ImageGallery images={post.images as string[] | null} />
               </div>
             ))
           ) : (
