@@ -2,7 +2,8 @@ import { db } from "@/db";
 import { posts, users } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { cookies } from "next/headers";
-import Link from "next/link"; // <--- IMPORT LINK
+import Link from "next/link"; 
+import Image from "next/image"; // <-- THÊM IMPORT IMAGE Ở ĐÂY
 import Navbar from "@/components/Navbar";
 import PostForm from "@/components/PostForm"; 
 import ImageGallery from "@/components/ImageGallery";
@@ -37,10 +38,12 @@ export default async function FeedPage() {
     .select({
       id: posts.id,
       content: posts.content,
-      images: posts.images, // Lấy cột images (chứa mảng JSON)
+      images: posts.images,       // Lấy mảng ảnh mới
+      oldImage: posts.oldImage,   // LẤY THÊM ẢNH CŨ
       createdAt: posts.createdAt,
       username: users.username, 
       userId: users.id,
+      avatarUrls: users.avatarUrls, // <--- THÊM DÒNG NÀY (Lấy lịch sử avatar)
     })
     .from(posts)
     .innerJoin(users, eq(posts.userId, users.id))
@@ -75,14 +78,33 @@ export default async function FeedPage() {
             allPosts.map((post) => (
               <div key={post.id} className="bg-white rounded-xl shadow-sm p-5 border border-gray-100 transition hover:shadow-md">
                 <div className="flex items-start gap-3">
-                  {/* Avatar */}
+                  
+                  {/* --- HIỂN THỊ AVATAR MỚI NHẤT --- */}
                   <div className="flex-shrink-0">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold shadow-sm">
-                      {post.username.charAt(0).toUpperCase()}
-                    </div>
+                    {(() => {
+                      // Lấy ảnh cuối cùng trong mảng
+                      const latestAvatar = (post.avatarUrls && Array.isArray(post.avatarUrls) && post.avatarUrls.length > 0) 
+                        ? post.avatarUrls[post.avatarUrls.length - 1] 
+                        : null;
+
+                      if (latestAvatar) {
+                        return (
+                          <div className="w-10 h-10 rounded-full overflow-hidden relative border border-gray-200 shadow-sm">
+                            <Image src={latestAvatar as string} alt="Avatar" fill className="object-cover" />
+                          </div>
+                        );
+                      }
+                      
+                      // Nếu không có ảnh thì hiện chữ cái đầu như cũ
+                      return (
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold shadow-sm">
+                          {post.username.charAt(0).toUpperCase()}
+                        </div>
+                      );
+                    })()}
                   </div>
                   
-                  {/* Nội dung chính */}
+                  {/* --- NỘI DUNG BÊN PHẢI --- */}
                   <div className="flex-1 w-full min-w-0"> 
                     
                     {/* Tên & Thời gian */}
@@ -112,8 +134,18 @@ export default async function FeedPage() {
                       </p>
                     )}
 
-                    {/* --- HIỂN THỊ ALBUM ẢNH BẰNG COMPONENT CON --- */}
-                    <ImageGallery images={post.images as string[] | null} />
+                    {/* --- XỬ LÝ GỘP ẢNH: Ưu tiên ảnh mới, nếu không có thì lấy ảnh cũ --- */}
+                    {(() => {
+                      let displayImages: string[] = [];
+                      
+                      if (post.images && Array.isArray(post.images) && post.images.length > 0) {
+                        displayImages = post.images as string[]; // Dùng ảnh mới
+                      } else if (post.oldImage) {
+                        displayImages = [post.oldImage as string]; // Dùng ảnh cũ (chuyển thành mảng 1 phần tử)
+                      }
+
+                      return <ImageGallery images={displayImages} />;
+                    })()}
 
                   </div>
                 </div>

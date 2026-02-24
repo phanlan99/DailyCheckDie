@@ -5,23 +5,28 @@ import Image from "next/image";
 import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
 
-// Cho phép nhận cả null hoặc các kiểu dữ liệu cũ để tránh sập web
 interface ImageGalleryProps {
-  images: any; 
+  images: any;
 }
 
 export default function ImageGallery({ images }: ImageGalleryProps) {
   const [open, setOpen] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // --- SỬA LỖI Ở ĐÂY ---
-  // Kiểm tra: Nếu không có dữ liệu, HOẶC dữ liệu KHÔNG PHẢI là mảng, HOẶC mảng rỗng -> Không hiển thị gì cả
-  if (!images || !Array.isArray(images) || images.length === 0) {
+  // --- 1. LỌC BỎ CÁC LINK LỖI ---
+  // Chỉ giữ lại những phần tử là chuỗi (string) và bắt đầu bằng "http" (link hợp lệ)
+  const validImages = Array.isArray(images) 
+    ? images.filter((url: any) => typeof url === 'string' && url.trim().startsWith('http'))
+    : [];
+
+  // --- 2. KIỂM TRA LẠI ---
+  // Nếu sau khi lọc xong mà không có ảnh nào hợp lệ thì không render gì cả
+  if (validImages.length === 0) {
     return null;
   }
 
-  // Lúc này chắc chắn images là mảng rồi, map() sẽ không bị lỗi nữa
-  const slides = images.map((url: string) => ({ src: url }));
+  // Chuyển đổi mảng hợp lệ sang slides
+  const slides = validImages.map((url: string) => ({ src: url }));
 
   const handleOpenLightbox = (index: number) => {
     setCurrentIndex(index);
@@ -33,10 +38,11 @@ export default function ImageGallery({ images }: ImageGalleryProps) {
       <div
         className={`
           mt-3 w-full grid gap-2 rounded-xl overflow-hidden
-          ${images.length === 1 ? "grid-cols-1" : "grid-cols-2"} 
+          ${validImages.length === 1 ? "grid-cols-1" : "grid-cols-2"} 
         `}
       >
-        {images.map((imgUrl: string, index: number) => (
+        {/* NHỚ SỬA images.map THÀNH validImages.map NHÉ */}
+        {validImages.map((imgUrl: string, index: number) => (
           <div
             key={index}
             className="relative w-full h-full cursor-pointer group rounded-lg overflow-hidden border-2 border-blue-200/80"

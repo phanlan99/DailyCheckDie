@@ -3,12 +3,16 @@ import { pgTable, serial, date, boolean, timestamp, text, integer,json } from "d
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
-  username: text("username").notNull().unique(), // Tên đăng nhập (Bắt buộc & Duy nhất)
-  password: text("password").notNull(),          // Mật khẩu (Lưu nguyên văn)
+  username: text("username").notNull().unique(),
+  password: text("password").notNull(),
   email: text("email"),
-  // --- THÊM 2 CỘT NÀY ---
-  otp: text("otp"), // Lưu mã 6 số
-  otpExpires: timestamp("otp_expires"),                          // Email (Không bắt buộc - Optional)
+  otp: text("otp"),
+  otpExpires: timestamp("otp_expires"),
+  
+  // --- THAY ĐỔI 2 CỘT NÀY THÀNH MẢNG JSON ---
+  avatarUrls: json("avatar_urls").$type<string[]>(), // Lưu lịch sử ảnh đại diện
+  coverUrls: json("cover_urls").$type<string[]>(),   // Lưu lịch sử ảnh bìa
+  
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -21,14 +25,18 @@ export const attendance = pgTable("attendance", {
 });
 
 // src/db/schema.ts
+// src/db/schema.ts
+
 export const posts = pgTable("posts", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").references(() => users.id).notNull(),
   content: text("content").notNull(),
   
-  // --- THAY ĐỔI Ở ĐÂY ---
-  // Lưu mảng các đường dẫn ảnh. Ví dụ: ["https://...", "https://..."]
-  images: json("images").$type<string[]>(), 
+  // 1. CỘT DI SẢN: Map vào cột "images" cũ trong DB dưới dạng text để giữ 15 ảnh
+  oldImage: text("images"), 
+  
+  // 2. CỘT MỚI: Tạo một cột hoàn toàn mới trong DB tên là "image_urls" dạng json
+  images: json("image_urls").$type<string[]>(), 
   
   createdAt: timestamp("created_at").defaultNow(),
 });

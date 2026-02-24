@@ -307,3 +307,50 @@ export async function createPost(formData: FormData) {
     return { error: "Lỗi hệ thống khi đăng bài." };
   }
 }
+
+// src/app/actions.ts
+
+// ... (các hàm cũ giữ nguyên)
+
+// --- HÀM CẬP NHẬT ẢNH PROFILE ---
+// src/app/actions.ts
+
+// ... (các import giữ nguyên)
+
+export async function updateUserProfileImages(newAvatarUrl?: string, newCoverUrl?: string) {
+  const cookieStore = await cookies();
+  const userIdCookie = cookieStore.get('userId');
+  if (!userIdCookie) return { error: "Bạn cần đăng nhập!" };
+  
+  const currentUserId = parseInt(userIdCookie.value);
+
+  // 1. Lấy thông tin user hiện tại để xem họ đã có ảnh nào chưa
+  const userRecord = await db.select().from(users).where(eq(users.id, currentUserId));
+  if (userRecord.length === 0) return { error: "Không tìm thấy user!" };
+  const currentUser = userRecord[0];
+
+  // 2. Chuẩn bị dữ liệu cập nhật (Cộng dồn vào mảng cũ)
+  const updateData: any = {};
+  
+  if (newAvatarUrl !== undefined) {
+    // Nếu trước đó chưa có mảng nào thì khởi tạo mảng rỗng []
+    const currentAvatarList = Array.isArray(currentUser.avatarUrls) ? currentUser.avatarUrls : [];
+    updateData.avatarUrls = [...currentAvatarList, newAvatarUrl]; // Thêm ảnh mới vào cuối
+  }
+  
+  if (newCoverUrl !== undefined) {
+    const currentCoverList = Array.isArray(currentUser.coverUrls) ? currentUser.coverUrls : [];
+    updateData.coverUrls = [...currentCoverList, newCoverUrl]; // Thêm ảnh mới vào cuối
+  }
+
+  // 3. Cập nhật vào DB
+  try {
+    await db.update(users)
+      .set(updateData)
+      .where(eq(users.id, currentUserId));
+    return { success: true };
+  } catch (err) {
+    console.error(err);
+    return { error: "Lỗi khi cập nhật ảnh hồ sơ." };
+  }
+}
