@@ -1,6 +1,6 @@
 "use client";
 
-import { createPost, getCloudinarySignature } from "@/app/actions"; // Import thêm hàm lấy chữ ký
+import { createPost, getCloudinarySignature } from "@/app/actions";
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
@@ -11,20 +11,46 @@ export default function PostForm() {
   
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null); // State lưu file thật để upload
+  
+  // State quản lý danh sách file và danh sách preview (Dạng mảng)
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
 
-  // Xử lý khi chọn ảnh
+  // Xử lý khi chọn ảnh (Hỗ trợ chọn nhiều)
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFile(file); // Lưu file vào state
-      const url = URL.createObjectURL(file);
-      setPreviewUrl(url);
-    } else {
-      setSelectedFile(null);
-      setPreviewUrl(null);
+    if (e.target.files && e.target.files.length > 0) {
+      // Chuyển FileList thành Array
+      const newFiles = Array.from(e.target.files);
+      
+      // Giới hạn: Tối đa 4 ảnh 1 lần đăng cho đẹp
+      if (newFiles.length + selectedFiles.length > 4) {
+        alert("Chỉ được chọn tối đa 4 ảnh thôi nhé!");
+        // Reset input file để người dùng chọn lại
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        return;
+      }
+
+      // Tạo Preview URL cho từng file
+      const newPreviews = newFiles.map(file => URL.createObjectURL(file));
+
+      setSelectedFiles(prev => [...prev, ...newFiles]); // Cộng dồn file cũ
+      setPreviewUrls(prev => [...prev, ...newPreviews]); // Cộng dồn preview cũ
+      
+      // Reset input value để có thể chọn lại cùng một file nếu vừa xóa
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
+  };
+
+  // Hàm xóa 1 ảnh khỏi danh sách chọn
+  const removeImage = (index: number) => {
+    const newFiles = [...selectedFiles];
+    const newPreviews = [...previewUrls];
+    
+    newFiles.splice(index, 1);
+    newPreviews.splice(index, 1);
+    
+    setSelectedFiles(newFiles);
+    setPreviewUrls(newPreviews);
   };
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -35,55 +61,53 @@ export default function PostForm() {
     const formElement = event.currentTarget;
     const formData = new FormData(formElement);
     
-    let uploadedImageUrl = "";
+    const uploadedImageUrls: string[] = [];
 
-    // --- BƯỚC 1: UPLOAD ẢNH LÊN CLOUDINARY (CLIENT-SIDE) ---
-    if (selectedFile) {
+    // --- BƯỚC 1: UPLOAD TẤT CẢ ẢNH SONG SONG LÊN CLOUDINARY ---
+    if (selectedFiles.length > 0) {
       try {
-        // 1. Xin chữ ký bảo mật từ Server
+        // Xin chữ ký 1 lần dùng cho tất cả các file trong đợt upload này
         const { signature, timestamp, folder, apiKey, cloudName } = await getCloudinarySignature();
 
-        // 2. Chuẩn bị dữ liệu gửi lên Cloudinary
-        const uploadData = new FormData();
-        uploadData.append('file', selectedFile);
-        uploadData.append('api_key', apiKey!);
-        uploadData.append('timestamp', timestamp.toString());
-        uploadData.append('signature', signature);
-        uploadData.append('folder', folder);
+        // Tạo mảng các Promise upload (Chạy song song)
+        const uploadPromises = selectedFiles.map(async (file) => {
+          const uploadData = new FormData();
+          uploadData.append('file', file);
+          uploadData.append('api_key', apiKey!);
+          uploadData.append('timestamp', timestamp.toString());
+          uploadData.append('signature', signature);
+          uploadData.append('folder', folder);
 
-        // 3. Gọi API Cloudinary trực tiếp từ trình duyệt
-        const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-          method: 'POST',
-          body: uploadData,
+          const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+            method: 'POST',
+            body: uploadData,
+          });
+          
+          if (!response.ok) throw new Error("Upload failed");
+          return response.json();
         });
 
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.error?.message || "Upload failed");
-        }
-
-        uploadedImageUrl = data.secure_url; // Lấy được Link ảnh HTTPS
+        // Chờ tất cả upload xong
+        const results = await Promise.all(uploadPromises);
         
+        // Lấy link ảnh từ kết quả
+        results.forEach((res: any) => uploadedImageUrls.push(res.secure_url));
+
       } catch (err) {
         console.error(err);
         setError("Lỗi khi tải ảnh lên Cloudinary. Vui lòng thử lại.");
         setIsLoading(false);
-        return; // Dừng lại nếu upload lỗi
+        return;
       }
     }
 
-    // --- BƯỚC 2: GỬI LINK ẢNH VÀ NỘI DUNG VỀ SERVER ---
+    // --- BƯỚC 2: GỬI MẢNG LINK VỀ SERVER ---
+    formData.delete('image'); // Xóa file gốc
     
-    // Xóa file ảnh gốc khỏi formData gửi về server (để server không phải nhận file nặng)
-    formData.delete('image'); 
-    
-    // Thêm link ảnh vừa có được vào formData
-    if (uploadedImageUrl) {
-        formData.append('imageUrl', uploadedImageUrl);
-    }
+    // Chuyển mảng link thành chuỗi JSON để gửi
+    formData.append('images', JSON.stringify(uploadedImageUrls));
 
-    // Gọi Server Action để lưu bài viết
+    // Gọi Server Action
     const result = await createPost(formData);
 
     if (result?.error) {
@@ -91,17 +115,17 @@ export default function PostForm() {
       setIsLoading(false);
     } else if (result?.success) {
       formElement.reset();
-      setPreviewUrl(null);
-      setSelectedFile(null);
+      setPreviewUrls([]);
+      setSelectedFiles([]);
       setIsLoading(false);
-      router.refresh(); // Làm mới trang để hiện bài mới
+      router.refresh();
     }
   }
 
   return (
     <form onSubmit={handleSubmit} className="relative">
       <h3 className="text-sm font-semibold text-gray-700 mb-3">
-        Hôm nay bạn có ảnh gì khoe không? (HD & 4K thoải mái)
+        Chia sẻ khoảnh khắc (Tối đa 4 ảnh)
       </h3>
       
       {error && (
@@ -117,28 +141,29 @@ export default function PostForm() {
         className="w-full p-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 text-sm resize-none bg-gray-50 focus:bg-white transition"
       />
 
-      {/* Preview Ảnh */}
-      {previewUrl && (
-        <div className="mt-3 relative w-full h-48 bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
-           <button 
-             type="button"
-             onClick={() => {
-                setPreviewUrl(null);
-                setSelectedFile(null);
-                if (fileInputRef.current) fileInputRef.current.value = "";
-             }}
-             className="absolute top-2 right-2 bg-black/50 text-white rounded-full p-1 hover:bg-black/70 z-10"
-           >
-             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-             </svg>
-           </button>
-           <Image 
-             src={previewUrl} 
-             alt="Preview" 
-             fill 
-             className="object-contain"
-           />
+      {/* --- GRID HIỂN THỊ PREVIEW --- */}
+      {previewUrls.length > 0 && (
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {previewUrls.map((url, index) => (
+            <div key={index} className="relative h-32 bg-gray-100 rounded-lg overflow-hidden border border-gray-200 group">
+              <Image 
+                src={url} 
+                alt="Preview" 
+                fill 
+                className="object-cover" 
+              />
+              {/* Nút xóa ảnh */}
+              <button 
+                type="button"
+                onClick={() => removeImage(index)}
+                className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 z-10"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          ))}
         </div>
       )}
 
@@ -153,12 +178,13 @@ export default function PostForm() {
             </svg>
             <span className="text-sm font-medium">Thêm ảnh</span>
           </label>
-          {/* Input file vẫn cần thiết để chọn ảnh, nhưng name="image" sẽ bị xóa trước khi gửi về server */}
+          {/* QUAN TRỌNG: Thêm 'multiple' để chọn nhiều ảnh */}
           <input 
             id="image-upload" 
             name="image" 
             type="file" 
             accept="image/*" 
+            multiple 
             className="hidden" 
             ref={fileInputRef}
             onChange={handleImageChange}

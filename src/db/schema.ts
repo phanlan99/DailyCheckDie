@@ -1,5 +1,5 @@
 // src/db/schema.ts
-import { pgTable, serial, date, boolean, timestamp, text, integer } from "drizzle-orm/pg-core";
+import { pgTable, serial, date, boolean, timestamp, text, integer,json } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -25,6 +25,10 @@ export const posts = pgTable("posts", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").references(() => users.id).notNull(),
   content: text("content").notNull(),
-  imageUrl: text("image_url"), // <--- THÊM CỘT NÀY (Lưu link ảnh)
+  
+  // --- THAY ĐỔI Ở ĐÂY ---
+  // Lưu mảng các đường dẫn ảnh. Ví dụ: ["https://...", "https://..."]
+  images: json("images").$type<string[]>(), 
+  
   createdAt: timestamp("created_at").defaultNow(),
 });

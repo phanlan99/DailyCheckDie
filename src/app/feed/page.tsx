@@ -14,7 +14,7 @@ function formatTime(date: Date | null) {
     minute: '2-digit', 
     day: '2-digit', 
     month: '2-digit',
-    timeZone: 'Asia/Ho_Chi_Minh' // <--- QUAN TRỌNG: Ép về giờ Việt Nam
+    timeZone: 'Asia/Ho_Chi_Minh' // Ép về giờ Việt Nam
   }).format(date);
 }
 
@@ -36,7 +36,7 @@ export default async function FeedPage() {
     .select({
       id: posts.id,
       content: posts.content,
-      imageUrl: posts.imageUrl, // Lấy link ảnh
+      images: posts.images, // <--- CẬP NHẬT: Lấy cột images (chứa mảng JSON)
       createdAt: posts.createdAt,
       username: users.username, 
       userId: users.id,
@@ -104,21 +104,28 @@ export default async function FeedPage() {
                       </p>
                     )}
 
-                    {/* Image content (Responsive giữ tỷ lệ gốc) */}
-                    {post.imageUrl && (
-                      <div className="mt-3 w-full rounded-lg overflow-hidden border border-gray-100 bg-gray-50">
-                        <Image 
-                           src={post.imageUrl} 
-                           alt="Post image" 
-                           // Kỹ thuật của Next.js để ảnh Responsive theo chiều rộng mà giữ tỷ lệ gốc
-                           width={0}
-                           height={0}
-                           sizes="100vw"
-                           style={{ width: '100%', height: 'auto' }} 
-                           className="hover:opacity-95 transition-opacity duration-300"
-                        />
+                    {/* --- HIỂN THỊ ALBUM ẢNH (CẬP NHẬT) --- */}
+                    {post.images && Array.isArray(post.images) && post.images.length > 0 && (
+                      <div className={`
+                        mt-3 w-full grid gap-1 rounded-lg overflow-hidden border border-gray-100
+                        ${post.images.length === 1 ? 'grid-cols-1' : 'grid-cols-2'} 
+                      `}>
+                        {post.images.map((imgUrl, index) => (
+                          <div key={index} className="relative w-full">
+                            <Image 
+                               src={imgUrl} 
+                               alt={`Photo ${index}`}
+                               width={0} 
+                               height={0} 
+                               sizes="100vw"
+                               style={{ width: '100%', height: 'auto', objectFit: 'cover' }}
+                               className="hover:opacity-95 transition"
+                            />
+                          </div>
+                        ))}
                       </div>
                     )}
+
                   </div>
                 </div>
               </div>

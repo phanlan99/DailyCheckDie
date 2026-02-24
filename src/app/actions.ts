@@ -207,7 +207,7 @@ export async function getMonthlySurvival(month: number, year: number) {
 }
 
 // =========================================================
-// PHẦN 4: HÀM HỖ TRỢ UPLOAD CLIENT-SIDE (MỚI THÊM)
+// PHẦN 4: HÀM HỖ TRỢ UPLOAD CLIENT-SIDE
 // =========================================================
 
 export async function getCloudinarySignature() {
@@ -238,38 +238,47 @@ export async function getCloudinarySignature() {
 }
 
 // =========================================================
-// PHẦN 5: HÀM ĐĂNG BÀI VIẾT (CẬP NHẬT: NHẬN LINK ẢNH)
+// PHẦN 5: HÀM ĐĂNG BÀI VIẾT (HỖ TRỢ NHIỀU ẢNH)
 // =========================================================
 
 export async function createPost(formData: FormData) {
   const content = formData.get('content') as string;
-  const imageUrl = formData.get('imageUrl') as string | null; 
   
+  // 1. NHẬN DANH SÁCH ẢNH (Dạng JSON string từ Client gửi lên)
+  const imagesJson = formData.get('images') as string; 
+  let imageList: string[] = [];
+  
+  try {
+    imageList = JSON.parse(imagesJson || "[]"); // Chuyển chuỗi JSON thành mảng
+  } catch (e) {
+    imageList = [];
+  }
+  
+  // 2. Lấy User ID từ cookie
   const cookieStore = await cookies();
   const userIdCookie = cookieStore.get('userId');
   if (!userIdCookie) return { error: "Bạn cần đăng nhập để đăng bài!" };
   
   const userId = parseInt(userIdCookie.value);
 
-  // Validate: Phải có Content HOẶC có Ảnh
-  if ((!content || content.trim().length === 0) && !imageUrl) {
+  // 3. Validate: Phải có Content HOẶC có ít nhất 1 Ảnh
+  if ((!content || content.trim().length === 0) && imageList.length === 0) {
     return { error: "Bạn phải viết gì đó hoặc đăng ảnh!" };
   }
 
-  // --- LOGIC MỚI: TÍNH NGÀY THEO GIỜ VIỆT NAM (UTC+7) ---
+  // 4. Kiểm tra giới hạn 5 bài/ngày (LOGIC UTC+7)
   const now = new Date();
   
-  // 1. Giả lập giờ VN bằng cách cộng thêm 7 tiếng vào giờ UTC hiện tại
+  // Giả lập giờ VN bằng cách cộng thêm 7 tiếng vào giờ UTC hiện tại
   const vnTime = new Date(now.getTime() + 7 * 60 * 60 * 1000);
   
-  // 2. Reset về 00:00:00 đầu ngày (Lúc này đang là 00:00 của giờ VN)
+  // Reset về 00:00:00 đầu ngày
   vnTime.setUTCHours(0, 0, 0, 0);
   
-  // 3. Trừ lại 7 tiếng để ra thời điểm chính xác trong Database (Database lưu UTC)
-  // (Ví dụ: 00:00 VN tương đương 17:00 hôm trước của UTC)
+  // Trừ lại 7 tiếng để ra thời điểm chính xác trong Database (UTC)
   const startOfDay = new Date(vnTime.getTime() - 7 * 60 * 60 * 1000);
   
-  // 4. Thời điểm cuối ngày là 24h sau đó
+  // Thời điểm cuối ngày là 24h sau đó
   const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
 
   // Lấy danh sách các bài đã đăng trong khoảng thời gian này
@@ -285,15 +294,16 @@ export async function createPost(formData: FormData) {
     return { error: `Hôm nay bạn đã đăng ${todayPosts.length}/5 bài. Hãy quay lại vào ngày mai nhé!` };
   }
 
-  // Lưu bài viết vào Database
+  // 5. Lưu bài viết vào Database
   try {
     await db.insert(posts).values({
       userId: userId,
       content: content || "",
-      imageUrl: imageUrl, 
+      images: imageList, // Lưu mảng ảnh vào cột 'images' (kiểu JSON)
     });
     return { success: true };
   } catch (err) {
+    console.error(err);
     return { error: "Lỗi hệ thống khi đăng bài." };
   }
 }
